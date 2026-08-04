@@ -148,8 +148,8 @@ assets:
   # ── Pass 3 (windows) ───────────────────────────────────────────────────────
   # OS token is LOWERCASE `windows`, breaking the pattern the other three legs
   # follow, and the format is `.zip` rather than `.tar.gz`.
-  # windows/amd64:
-  #   - "^trivy_\\d+\\.\\d+\\.\\d+_windows-64bit\\.zip$"
+  windows/amd64:
+    - "^trivy_\\d+\\.\\d+\\.\\d+_windows-64bit\\.zip$"
 
 # Every archive — tarball and zip alike — is FLAT: `trivy` (`trivy.exe` on
 # Windows) sits at the archive root beside `LICENSE`, `README.md` and a

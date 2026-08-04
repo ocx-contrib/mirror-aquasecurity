@@ -101,9 +101,9 @@ platforms:
     runner: macos-14
     shell: bash
   # ── Pass 3 (windows) ───────────────────────────────────────────────────────
-  # windows/amd64:
-  #   runner: windows-latest
-  #   shell: pwsh
+  windows/amd64:
+    runner: windows-latest
+    shell: pwsh
   #
   # windows/arm64 is DELIBERATELY ABSENT, not staged. Upstream ships exactly one
   # Windows asset — `trivy_<V>_windows-64bit.zip` — on every release back past
