@@ -26,6 +26,35 @@ source:
   # not. The anchored `$` keeps any future suffixed tag out.
   tag_pattern: "^v(?P<version>\\d+\\.\\d+\\.\\d+)$"
 
+# ─── Anonymous discovery — forced, and measured ─────────────────────────────
+#
+# Aqua Security's GitHub org rejects the Actions installation `GITHUB_TOKEN` on
+# its API, even for public reads. The generated discover step forwards that
+# token to the in-process octocrab client, and `pipeline plan` then dies
+# immediately (0.34 s into the step, deterministically across two attempts):
+#
+#   ERROR source error: failed to list upstream versions: source error:
+#         failed to list GitHub releases: GitHub
+#   ##[error]Process completed with exit code 69.
+#
+# The same `plan`, same pinned ocx-mirror, succeeds locally BOTH anonymously
+# and with a personal token — so it is the installation token specifically that
+# is refused, not the request. Identical in shape to the shipped
+# `ocx-contrib/mirror-shopify` precedent (Shopify's org does the same).
+#
+# The generator hardcodes `GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}` on that
+# step with no spec-level knob, so `allow_manual_edits` drops the
+# verify-generated drift guard and the env block is hand-removed from
+# `.github/workflows/mirror-trivy.yml`. Discovery then runs unauthenticated:
+# measured at ONE core API call per plan, once per 6 h poll, well under the
+# 60/h anonymous quota. Asset downloads are plain HTTP and never touch it.
+#
+# ⚠ RE-APPLY THE TOKEN REMOVAL AFTER ANY `ocx-mirror package pipeline generate
+# ci` — with the guard disarmed, a regenerate silently restores the token and
+# the mirror goes back to failing every scheduled run at discover. See README
+# "Maintenance note".
+allow_manual_edits: true
+
 # ─── libc gate (Phase 3.5) — the evidence, not the conclusion ───────────────
 #
 # trivy is Go, but "Go" is not the verdict — a cgo-enabled Go build links libc

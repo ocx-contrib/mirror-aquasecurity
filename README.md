@@ -119,8 +119,9 @@ naming a subset silently stops rendering the rest while staying green — and th
 drift guard reds on a generated workflow the current spec set no longer
 produces.
 
-`verify-generated.yml` exits 65 on drift. If a generated workflow is wrong, the
-spec or the renderer template is wrong — fix it there and regenerate.
+There is **no `verify-generated.yml` drift guard in this repo** — see the
+maintenance note below. If a generated workflow is wrong, the spec or the
+renderer template is wrong — fix it there and regenerate.
 
 Run `direnv allow` once to put the pinned toolchain on `PATH`, and invoke
 `ocx-mirror` directly — never `ocx run -- ocx-mirror`, which pins
@@ -173,6 +174,39 @@ The planted credentials are synthetic and deliberately *not* a vendor's own
 documentation example: AWS's `AKIAIOSFODNN7EXAMPLE` is allowlisted by trivy's
 default config and yields zero findings, which is exactly the silent pass the
 negative control exists to catch.
+
+## Maintenance note — anonymous discovery
+
+Aqua Security's GitHub org rejects the Actions installation `GITHUB_TOKEN` on
+its API, even for public reads. Authenticated `pipeline plan` dies 0.34 s into
+the discover step, deterministically:
+
+```
+ERROR source error: failed to list upstream versions: source error:
+      failed to list GitHub releases: GitHub
+##[error]Process completed with exit code 69.
+```
+
+The same `plan`, same pinned `ocx-mirror`, succeeds locally **both anonymously
+and with a personal token** — so it is the installation token specifically that
+is refused, not the request. Identical in shape to the shipped
+`ocx-contrib/mirror-shopify` precedent. So:
+
+- `trivy/mirror.yml` sets `allow_manual_edits: true`, and no
+  `verify-generated.yml` drift guard is emitted.
+- The generated `discover` → *Plan versions* step has its
+  `GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}` env **hand-removed**, so
+  release-listing runs unauthenticated — measured at 1 core API call per plan,
+  once per 6 h poll, under the 60/h anonymous quota. Asset downloads are plain
+  HTTP and never touch that quota.
+
+That step's own `Login to ghcr.io` is a **separate** credential path (docker
+native store, for reading the *target's* tags) and is deliberately left alone.
+
+⚠️ **Re-apply the token removal after any
+`ocx-mirror package pipeline generate ci`.** With the guard disarmed a
+regenerate silently restores the env block, and the mirror goes back to failing
+every scheduled run at discover — with no drift guard to say so.
 
 ## Required secrets
 

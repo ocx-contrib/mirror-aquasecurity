@@ -49,11 +49,20 @@ jobs:
                 --password-stdin
       - id: plan
         name: Plan versions
-        # `GITHUB_TOKEN` is forwarded to the in-process octocrab client so
-        # release-listing runs authenticated (5 000 reqs/h) instead of the
-        # 60/h unauthenticated quota that bites on multi-version runs.
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        # MANUAL EDIT (allow_manual_edits): the `GITHUB_TOKEN` env the
+        # generator normally forwards here — to the in-process octocrab client,
+        # for the 5 000 reqs/h authenticated quota — is intentionally REMOVED.
+        # Aqua Security's GitHub org rejects the Actions installation token on
+        # its API (exit 69, "failed to list GitHub releases", 0.34 s in,
+        # deterministic across two attempts), while anonymous reads succeed —
+        # the same `plan` passes locally both anonymously and with a PAT.
+        # Release-listing therefore runs unauthenticated: 1 core API call per
+        # plan, once per 6h poll, well under the 60/h anonymous quota. Asset
+        # downloads are plain HTTP and never touch that quota. Same shape as
+        # the shipped ocx-contrib/mirror-shopify precedent.
+        # The `Login to ghcr.io` step above is a SEPARATE credential path
+        # (docker native store, for reading the TARGET's tags) — leave it alone.
+        # RE-APPLY this removal after any `ocx-mirror package pipeline generate ci`.
         run: |
           set -euo pipefail
           ocx-mirror package pipeline plan --spec trivy/mirror.yml --format json > plan.json
