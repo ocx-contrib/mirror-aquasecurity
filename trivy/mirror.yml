@@ -141,10 +141,10 @@ assets:
     - "^trivy_\\d+\\.\\d+\\.\\d+_Linux-ARM64\\.tar\\.gz$"
   # ── Pass 2 (darwin) ────────────────────────────────────────────────────────
   # OS token is `macOS` — not `Darwin`, not `darwin`, not `macos`.
-  # darwin/amd64:
-  #   - "^trivy_\\d+\\.\\d+\\.\\d+_macOS-64bit\\.tar\\.gz$"
-  # darwin/arm64:
-  #   - "^trivy_\\d+\\.\\d+\\.\\d+_macOS-ARM64\\.tar\\.gz$"
+  darwin/amd64:
+    - "^trivy_\\d+\\.\\d+\\.\\d+_macOS-64bit\\.tar\\.gz$"
+  darwin/arm64:
+    - "^trivy_\\d+\\.\\d+\\.\\d+_macOS-ARM64\\.tar\\.gz$"
   # ── Pass 3 (windows) ───────────────────────────────────────────────────────
   # OS token is LOWERCASE `windows`, breaking the pattern the other three legs
   # follow, and the format is `.zip` rather than `.tar.gz`.
