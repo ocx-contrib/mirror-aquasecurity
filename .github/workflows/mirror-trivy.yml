@@ -6,7 +6,7 @@ name: trivy
 
 on:
   schedule:
-    - cron: '54 */6 * * *'
+    - cron: '34 4-23/6 * * *'
   workflow_dispatch:
   push:
     branches: [main]
