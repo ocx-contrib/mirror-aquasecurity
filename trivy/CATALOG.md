@@ -61,17 +61,6 @@ Per-project defaults go in a `trivy.yaml`, findings are suppressed by
 fingerprint in a `.trivyignore`, and `--exit-code 1` turns any finding into a
 failing CI step.
 
-## Install with ocx
-
-```sh
-ocx install ocx.sh/aquasecurity/trivy
-```
-
-```sh
-# or pin a specific version
-ocx install ocx.sh/aquasecurity/trivy:0.73.0
-```
-
 ## Links
 
 - [Trivy on GitHub](https://github.com/aquasecurity/trivy)
