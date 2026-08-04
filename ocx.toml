@@ -1,0 +1,12 @@
+#:schema https://ocx.sh/schemas/project/v1.json
+# OCX project toolchain for the mirror-aquasecurity sibling repo.
+#
+# Pin the floating MINOR, never the patch: `:0.5` picks up 0.5.1+ on a plain
+# `ocx update`, whereas `:0.5.0` floats only over rebuilds of 0.5.0 and can
+# never reach a patch release. Never `:0` — on a 0.x project the minor is where
+# breaking changes land (`lock_version` went 1→2→3 across 0.3.6/0.4.3/0.5.0).
+# The concrete digest belongs in ocx.lock only.
+
+[tools]
+cli = "ocx.sh/ocx/cli:0.5"
+mirror = "ocx.sh/ocx/mirror:0.5"

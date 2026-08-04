@@ -1,0 +1,119 @@
+# Shared base for every spec in this repository (trivy, the security scanner).
+#
+# NOT a spec: it has no name/target/source and is never loaded on its own.
+# Everything a package owns — name, target, source, assets, asset_type,
+# bin_scan, metadata, catalog, tests, versions, announce, annotations — stays
+# in that package's own mirror.yml.
+#
+# ⚠️ `extends:` is a SHALLOW merge of top-level keys. A spec that sets a key
+# below replaces that block OUTRIGHT — there is no per-key merge. `platforms:`
+# is where this bites: it carries BOTH the runner matrix and the container
+# legs, so a child that restates it to tweak one runner silently drops every
+# `containers:` entry. Nothing reds — the legs simply stop existing, and every
+# os.features claim in that spec goes back to being merely asserted. Restate
+# `platforms:` IN FULL or not at all. trivy/mirror.yml deliberately does NOT
+# restate it, which removes that trap structurally.
+
+skip_prereleases: true
+cascade: true
+
+# New package; upstream versions are bare semver (`0.73.0`) carrying no `+build`
+# segment, so the fleet default applies with no exception. A cascade tag
+# (`latest`, `0`, `0.73`) re-points on every re-publish; without a build segment
+# the new manifest would reuse the bare version tag and orphan the prior digest
+# for registry GC, breaking any `@sha256:` pin in a consumer's ocx.lock.
+build_timestamp: date
+
+verify:
+  github_asset_digest: true
+
+concurrency:
+  # trivy is an unusually LARGE artifact: the Linux amd64 tarball is ~48 MB
+  # compressed around a single ~166 MB static Go binary (arm64 ~154 MB, the
+  # Windows PE ~170 MB). Five platforms × the mirrored version range is several
+  # GB of bundle traffic per full run, so the download/bundle/push fan-out is
+  # halved from the fleet default to keep a runner's disk and the GHCR push
+  # within comfortable bounds. `compression_threads: 0` = use every core, which
+  # is where the wall-clock actually goes on a payload this size.
+  max_downloads: 4
+  max_bundles: 2
+  max_pushes: 1
+  rate_limit_ms: 100
+  max_retries: 3
+  compression_threads: 0
+
+# ─── Platform matrix ────────────────────────────────────────────────────────
+#
+# `os.features` states what an artifact REQUIRES OF THE HOST — it is not a
+# label for how it was built. Upstream's Linux binaries are Go builds with cgo
+# disabled and were byte-measured on BOTH declared arches at BOTH ends of the
+# mirrored range: `statically linked`, zero PT_INTERP, zero DT_NEEDED, and not
+# UPX-packed (section headers present, zero `^UPX` strings — the packer stub
+# would otherwise make `file` call every asset "statically linked" and forge
+# this very verdict). The measurement transcript is recorded above
+# trivy/mirror.yml's `assets:`.
+#
+# So both Linux keys are BARE. `+libc.glibc` or `+libc.musl` would be a false
+# requirement that hid the package from hosts it in fact runs on.
+#
+# A bare key claims universality, so it must prove it: ubuntu (glibc) + alpine
+# (musl) + fedora (a different glibc vintage). The ALPINE LEG IS THE PROOF —
+# drop it and the universal claim is merely asserted.
+#
+# ─── NO `containers[].setup:` — deliberate, and measured ────────────────────
+#
+# The smoke test runs `trivy fs --scanners secret`, which shells out to nothing
+# and reads nothing but the files it was pointed at: the secret rule set is
+# compiled into the binary, so no vulnerability database, no OCI check bundle
+# and no network round trip is involved. Nothing needs provisioning into any
+# leg — and provisioning anything would make these legs prove LESS, because the
+# point of the bare `os.features` key is that the artifact requires NOTHING of
+# the host.
+#
+# A future package here whose libc measurement differs must restate this whole
+# block in its own spec — see the shallow-merge warning at the top.
+platforms:
+  linux/amd64:
+    runner: ubuntu-latest
+    containers:
+      - { image: "ubuntu:24.04", shell: bash }
+      - { image: "alpine:3.20",  shell: sh }
+      - { image: "fedora:40",    shell: bash }
+  linux/arm64:
+    # arm64 container legs run natively — no qemu — so the runner arch must
+    # match the platform or the renderer reds the leg up front.
+    runner: ubuntu-24.04-arm
+    containers:
+      - { image: "ubuntu:24.04", shell: bash }
+      - { image: "alpine:3.20",  shell: sh }
+      - { image: "fedora:40",    shell: bash }
+  # ── Pass 2 (darwin) ────────────────────────────────────────────────────────
+  # Kept commented in lockstep with the matching `assets:` keys in
+  # trivy/mirror.yml. A declared platform with no resolvable asset does not
+  # red — it boots a real runner and reports SUCCESS having tested nothing —
+  # so the platform key and its asset regex are uncommented in the SAME pass.
+  # darwin/amd64:
+  #   # Intel slice tested on the arm64 macos-14 runner via Rosetta 2 —
+  #   # GitHub's native macos-13 Intel pool is exhausted and deadlocks push.
+  #   runner: macos-14
+  #   prefix: ["arch", "-x86_64"]
+  # darwin/arm64:
+  #   runner: macos-14
+  #   shell: bash
+  # ── Pass 3 (windows) ───────────────────────────────────────────────────────
+  # windows/amd64:
+  #   runner: windows-latest
+  #   shell: pwsh
+  #
+  # windows/arm64 is DELIBERATELY ABSENT, not staged. Upstream ships exactly one
+  # Windows asset — `trivy_<V>_windows-64bit.zip` — on every release back past
+  # the mirrored range; there is no `windows-ARM64` artifact to declare. See the
+  # scope block in trivy/mirror.yml.
+  #
+  # No `containers:` on darwin or windows — those runners have no Linux
+  # container engine, and the key is rejected at spec load.
+
+notify:
+  discord:
+    webhook_secret: OCX_MIRROR_DISCORD_HOOK
+    user_id: "227748867204972545"  # pinged in-message on failures

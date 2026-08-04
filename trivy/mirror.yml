@@ -1,0 +1,191 @@
+# ⚠ `extends:` is a SHALLOW merge of TOP-LEVEL KEYS. Setting a key here
+# REPLACES the base's block outright — there is no per-key merge. `platforms:`
+# is deliberately NOT restated below: it carries the container legs that make
+# this spec's bare Linux keys honest, and restating it to tweak one runner
+# would drop them all without reddening anything.
+extends: ../mirror-base.yml
+
+name: trivy
+
+# Logical index package `aquasecurity/trivy` at the physical path
+# `ghcr.io/ocx-contrib/aquasecurity/trivy` — slash segments, never
+# hyphen-flattened. Two segments always; the GitHub org IS the vendor's own
+# brand (Aqua Security), and the org plausibly holds more than one mirrorable
+# tool (trivy-operator, tracee), so the org names the namespace and the tool
+# names the package. The first segment must be this repo's own GitHub owner:
+# GITHUB_TOKEN only authorises packages owned by the repo the workflow runs in.
+target:
+  registry: ghcr.io
+  repository: ocx-contrib/aquasecurity/trivy
+
+source:
+  type: github_release
+  owner: aquasecurity
+  repo: trivy
+  # trivy tags carry a "v" prefix (e.g. "v0.73.0"); the captured version does
+  # not. The anchored `$` keeps any future suffixed tag out.
+  tag_pattern: "^v(?P<version>\\d+\\.\\d+\\.\\d+)$"
+
+# ─── libc gate (Phase 3.5) — the evidence, not the conclusion ───────────────
+#
+# trivy is Go, but "Go" is not the verdict — a cgo-enabled Go build links libc
+# dynamically. Measured on BOTH declared Linux arches, and on the amd64 asset at
+# BOTH ends of the mirrored range, because a toolchain can change mid-series:
+#
+#   $ file x64/trivy            # trivy_0.73.0_Linux-64bit.tar.gz
+#   ELF 64-bit LSB executable, x86-64, version 1 (SYSV), statically linked,
+#   Go BuildID=…, BuildID[sha1]=1d15f6a9…, stripped
+#   $ readelf -l x64/trivy | grep -c INTERP   → 0
+#   $ readelf -d x64/trivy | grep -c NEEDED   → 0
+#
+#   $ file arm64/trivy          # trivy_0.73.0_Linux-ARM64.tar.gz
+#   ELF 64-bit LSB executable, ARM aarch64, version 1 (SYSV), statically linked,
+#   Go BuildID=…, BuildID[sha1]=dd9aeb66…, stripped
+#   $ readelf -l arm64/trivy | grep -c INTERP → 0
+#   $ readelf -d arm64/trivy | grep -c NEEDED → 0
+#
+#   $ file x64_712/trivy        # trivy_0.71.2_Linux-64bit.tar.gz
+#   ELF 64-bit LSB executable, x86-64, version 1 (SYSV), statically linked,
+#   Go BuildID=…, BuildID[sha1]=c1637c62…, stripped
+#   $ readelf -l x64_712/trivy | grep -c INTERP → 0
+#   $ readelf -d x64_712/trivy | grep -c NEEDED → 0
+#
+# And the anti-forgery cross-check, because a UPX stub carries no PT_INTERP or
+# PT_DYNAMIC either and would make `file` report a glibc-dynamic binary as
+# "statically linked":
+#
+#   $ readelf -h …/trivy | grep 'Start of section headers'  → 400 (not 0)
+#   $ strings -a …/trivy | grep -c '^UPX'                   → 0
+#
+# Not packed, genuinely static. No PT_INTERP and no DT_NEEDED on any of the
+# three: the artifact requires nothing of the host, so both Linux keys are
+# BARE — no `+libc.*` suffix. Container legs (ubuntu + alpine + fedora on both
+# arches) live in ../mirror-base.yml and are what turn that claim into evidence.
+#
+# ─── ⚠ CASING IS INCONSISTENT BY DESIGN — hand-mapped, never templated ──────
+#
+# There is no `{os}`/`{arch}` interpolation that produces this asset set. The
+# OS token is capitalised for `Linux` and `macOS` but LOWERCASE for `windows`;
+# inside the Linux family the arch token is uppercase for `ARM64`/`PPC64LE` but
+# lowercase for `s390x`. Every pattern below therefore spells its leg's casing
+# out literally. A single case rule across the legs silently 0-matches one of
+# them, and a 0-match is skipped rather than reported — a green run with a
+# missing platform.
+#
+# ─── Scope + resolution (verified on EVERY in-range release) ────────────────
+#
+# The mirrored range is exactly v0.71.2, v0.72.0, v0.73.0 — three releases.
+# Each pattern below was matched against each release's full asset list:
+# EXACTLY ONE match, every time, both ways. Every asset name also embeds the
+# version of the tag that carries it (`trivy_0.73.0_*` under `v0.73.0`), so no
+# release re-ships a previous version's binaries under a new tag.
+#
+# Upstream ships a large NOISE SET around each platform tarball, which the
+# `\.tar\.gz$` / `\.zip$` end-anchors are what keep out:
+#   trivy_<V>_Linux-64bit.deb / .rpm         — distro installers
+#   trivy_<V>_*.sigstore.json                — signature sidecar, one per asset
+#   trivy_<V>_checksums.txt(.sigstore.json)  — sidecars
+#   bom.json                                 — whole-release SBOM, not per-platform
+# The end anchor is load-bearing twice over: unanchored, `Linux-64bit` reaches
+# the `.deb` and `.rpm` twins (an ambiguous-match hard error), and `Linux-ARM`
+# reaches `Linux-ARM64`.
+#
+# Upstream also publishes, and this mirror deliberately does not carry:
+#   trivy_<V>_Linux-32bit.tar.gz    — ocx has no linux/386 Architecture
+#   trivy_<V>_Linux-ARM.tar.gz      — ocx has no 32-bit arm Architecture
+#   trivy_<V>_Linux-PPC64LE.tar.gz  — ocx has no ppc64le Architecture
+#   trivy_<V>_Linux-s390x.tar.gz    — ocx has no s390x Architecture
+#   trivy_<V>_FreeBSD-64bit.tar.gz  — ocx has no freebsd OperatingSystem
+# ocx expresses amd64 and arm64 on linux/darwin/windows only, so none of those
+# is a declarable platform key rather than a deliberate omission.
+#
+# ⚠ There is NO `windows-ARM64` asset at any version — upstream ships exactly
+# one Windows artifact, `trivy_<V>_windows-64bit.zip`. `windows/arm64` is
+# therefore absent, not staged: declaring it would boot a real windows-11-arm
+# runner that resolves nothing and reports SUCCESS having tested nothing.
+assets:
+  linux/amd64:
+    - "^trivy_\\d+\\.\\d+\\.\\d+_Linux-64bit\\.tar\\.gz$"
+  linux/arm64:
+    # `ARM64` uppercase — and the end anchor is what stops `Linux-ARM64` being
+    # reached by the `Linux-ARM` (32-bit) pattern's shape, and vice versa.
+    - "^trivy_\\d+\\.\\d+\\.\\d+_Linux-ARM64\\.tar\\.gz$"
+  # ── Pass 2 (darwin) ────────────────────────────────────────────────────────
+  # OS token is `macOS` — not `Darwin`, not `darwin`, not `macos`.
+  # darwin/amd64:
+  #   - "^trivy_\\d+\\.\\d+\\.\\d+_macOS-64bit\\.tar\\.gz$"
+  # darwin/arm64:
+  #   - "^trivy_\\d+\\.\\d+\\.\\d+_macOS-ARM64\\.tar\\.gz$"
+  # ── Pass 3 (windows) ───────────────────────────────────────────────────────
+  # OS token is LOWERCASE `windows`, breaking the pattern the other three legs
+  # follow, and the format is `.zip` rather than `.tar.gz`.
+  # windows/amd64:
+  #   - "^trivy_\\d+\\.\\d+\\.\\d+_windows-64bit\\.zip$"
+
+# Every archive — tarball and zip alike — is FLAT: `trivy` (`trivy.exe` on
+# Windows) sits at the archive root beside `LICENSE`, `README.md` and a
+# `contrib/` directory of report templates, with no wrapper directory. Verified
+# by `tar tvf` on 0.71.2 linux-amd64 and 0.73.0 linux-amd64/linux-arm64/
+# macOS-arm64, and `unzip -l` on 0.73.0 windows-amd64 — eight entries, the same
+# eight every time. So strip_components 0 on every platform, the binary lands
+# at the content root, and one metadata.json (PATH = ${installPath}) serves
+# every platform. `strip_components: 1` here would DELETE the binary and hoist
+# `contrib/`'s contents in its place.
+asset_type:
+  type: archive
+  strip_components: 0
+
+# FORCED by the flat archive, not chosen. `bin_scan` only inspects an
+# interface-visible `${installPath}/<dir>` PATH entry, and this archive has no
+# binary-bearing subdirectory to point one at (`contrib/` holds only 0644
+# `.tpl` templates), so both `auto` and `verify` fail spec load at exit 65:
+#
+#   bin_scan is enabled but metadata.json declares no interface-visible
+#   ${installPath}/<dir> PATH entry — the verification would inspect no file and
+#   pass green whatever the archive contains.
+#
+# The `binaries` list in metadata.json is therefore hand-maintained, exactly as
+# that error directs. It is short and stable: `trivy` (`trivy.exe` on Windows)
+# is the only mode-0755 entry in the archive; LICENSE, README.md and the five
+# `contrib/*.tpl` files are 0644 data. Quoted so no YAML 1.1 reader folds the
+# bare word into boolean `false`.
+bin_scan: "off"
+
+metadata:
+  default: metadata.json
+
+catalog:
+  logo: logo.svg
+
+versions:
+  # 0.71.2 per the run's package binding. Every release from here to 0.73.0
+  # resolves all declared platforms; none is asset-less.
+  min: "0.71.2"
+  new_per_run: 5
+  poll_interval: "54 */6 * * *"
+
+tests:
+  # `script:` resolves from the REPOSITORY ROOT — unlike `metadata.default` and
+  # `catalog.logo` above, which resolve against this spec's own directory.
+  #
+  # The smoke scans with `--scanners secret`, deliberately NOT the default
+  # `vuln` scanner: the vulnerability database is a multi-hundred-megabyte OCI
+  # artifact trivy downloads on first use, so a vuln-based smoke would test
+  # GitHub's CDN as much as the binary and would red on any network hiccup in
+  # any of six container legs. The secret rule set is compiled into the binary,
+  # needs no database, no OCI check bundle and no network at all — which is
+  # also why no leg needs a `containers[].setup:` line.
+  - name: smoke
+    script: trivy/tests/smoke.star
+
+annotations:
+  # From the Phase 1.5 license gate:
+  #   $ gh api repos/aquasecurity/trivy/license --jq '.license.spdx_id'
+  #   Apache-2.0
+  org.opencontainers.image.licenses: "Apache-2.0"
+
+announce:
+  # Spelled out, not derived from target.repository — the logical name and the
+  # physical path are related by convention only.
+  package: aquasecurity/trivy
+  fork: ocx-contrib/index
